@@ -1,3 +1,18 @@
+output "app_url" {
+  description = "Application URL (HTTP through the load balancer)."
+  value       = "http://${aws_lb.app.dns_name}"
+}
+
+output "asg_name" {
+  description = "Auto Scaling group name."
+  value       = aws_autoscaling_group.app.name
+}
+
+output "target_group_arn" {
+  description = "Target group ARN, for checking target health."
+  value       = aws_lb_target_group.app.arn
+}
+
 output "db_identifier" {
   description = "RDS instance identifier."
   value       = aws_db_instance.main.identifier

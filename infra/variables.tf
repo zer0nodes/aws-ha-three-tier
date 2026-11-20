@@ -21,3 +21,33 @@ variable "db_multi_az" {
   type        = bool
   default     = false
 }
+
+variable "instance_type" {
+  description = "EC2 instance type for the app tier. Must be x86_64 to match the AMI."
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "asg_min_size" {
+  description = "Minimum number of app instances."
+  type        = number
+  default     = 2
+}
+
+variable "asg_max_size" {
+  description = "Maximum number of app instances."
+  type        = number
+  default     = 4
+}
+
+variable "asg_desired_capacity" {
+  description = "Initial number of app instances. Later changes come from scaling, so Terraform ignores them."
+  type        = number
+  default     = 2
+}
+
+variable "app_version" {
+  description = "Version label shown by the app. Changing it rolls out new instances through an instance refresh."
+  type        = string
+  default     = "v1"
+}

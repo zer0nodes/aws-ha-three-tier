@@ -1,0 +1,22 @@
+#cloud-config
+write_files:
+  - path: /opt/app/app.py
+    encoding: b64
+    content: ${app_py}
+  - path: /opt/app/requirements.txt
+    encoding: b64
+    content: ${requirements_txt}
+  - path: /etc/systemd/system/app.service
+    encoding: b64
+    content: ${app_service}
+  - path: /etc/app.env
+    encoding: b64
+    permissions: "0600"
+    content: ${app_env}
+runcmd:
+  - dnf install -y python3.15
+  - python3.15 -m venv /opt/app/venv
+  - /opt/app/venv/bin/pip install --no-cache-dir -r /opt/app/requirements.txt
+  - useradd --system --shell /sbin/nologin app
+  - systemctl daemon-reload
+  - systemctl enable --now app
