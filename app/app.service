@@ -7,7 +7,7 @@ After=network-online.target
 User=app
 WorkingDirectory=/opt/app
 EnvironmentFile=/etc/app.env
-ExecStart=/opt/app/venv/bin/gunicorn --workers 2 --threads 4 --bind 0.0.0.0:8080 app:app
+ExecStart=/opt/app/venv/bin/gunicorn --workers 2 --threads 4 --keep-alive 75 --no-control-socket --bind 0.0.0.0:8080 app:app
 Restart=always
 RestartSec=2
 
