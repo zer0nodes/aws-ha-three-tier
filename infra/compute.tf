@@ -42,6 +42,10 @@ resource "aws_launch_template" "app" {
     http_tokens = "required"
   }
 
+  monitoring {
+    enabled = true
+  }
+
   block_device_mappings {
     device_name = "/dev/xvda"
 
@@ -73,6 +77,7 @@ resource "aws_autoscaling_group" "app" {
   desired_capacity          = var.asg_desired_capacity
   health_check_type         = "ELB"
   health_check_grace_period = 300
+  enabled_metrics           = ["GroupDesiredCapacity", "GroupInServiceInstances"]
 
   ignore_failed_scaling_activities = true
 
@@ -104,4 +109,18 @@ resource "aws_autoscaling_group" "app" {
   }
 
   depends_on = [aws_route_table_association.this, aws_db_instance.main]
+}
+
+resource "aws_autoscaling_policy" "cpu" {
+  name                   = "${local.name}-cpu-target"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    target_value = 50
+
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+  }
 }

@@ -51,3 +51,10 @@ variable "app_version" {
   type        = string
   default     = "v1"
 }
+
+variable "alarm_email" {
+  description = "Optional e-mail address for alarm notifications. Set it in terraform.tfvars, which Git ignores. SNS first sends a confirmation link."
+  type        = string
+  default     = null
+  sensitive   = true
+}

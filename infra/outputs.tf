@@ -22,3 +22,8 @@ output "db_endpoint" {
   description = "PostgreSQL endpoint (host:port), reachable only from inside the VPC."
   value       = aws_db_instance.main.endpoint
 }
+
+output "dashboard_url" {
+  description = "CloudWatch dashboard in the AWS console."
+  value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards/dashboard/${aws_cloudwatch_dashboard.main.dashboard_name}"
+}
