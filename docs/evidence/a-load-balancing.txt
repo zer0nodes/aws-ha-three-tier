@@ -1,0 +1,29 @@
+Scenario A: load balancing and shared state
+
+$ python scripts/probe.py --url <app_url>/api/info --count 20 --interval 0.5
+probe /api/info every 0.5 s, started 2026-11-21T20:54:52+01:00
+20:54:52  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=1  185 ms
+20:54:53  200  i-08483548f58333652  eu-north-1a  v1  visits=2  130 ms
+20:54:53  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=3  132 ms
+20:54:54  200  i-08483548f58333652  eu-north-1a  v1  visits=4  125 ms
+20:54:54  200  i-08483548f58333652  eu-north-1a  v1  visits=5  110 ms
+20:54:55  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=6  138 ms
+20:54:55  200  i-08483548f58333652  eu-north-1a  v1  visits=7  127 ms
+20:54:56  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=8  128 ms
+20:54:56  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=9  131 ms
+20:54:57  200  i-08483548f58333652  eu-north-1a  v1  visits=10  112 ms
+20:54:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=11  133 ms
+20:54:58  200  i-08483548f58333652  eu-north-1a  v1  visits=12  125 ms
+20:54:58  200  i-08483548f58333652  eu-north-1a  v1  visits=13  123 ms
+20:54:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=14  131 ms
+20:54:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=15  119 ms
+20:55:00  200  i-08483548f58333652  eu-north-1a  v1  visits=16  110 ms
+20:55:00  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=17  128 ms
+20:55:01  200  i-08483548f58333652  eu-north-1a  v1  visits=18  119 ms
+20:55:01  200  i-08483548f58333652  eu-north-1a  v1  visits=19  138 ms
+20:55:02  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=20  125 ms
+
+requests 20, ok 20, errors 0
+instance i-01e267cf85a7fa3e4 (eu-north-1b): 10 responses, 20:54:52 - 20:55:02
+instance i-08483548f58333652 (eu-north-1a): 10 responses, 20:54:53 - 20:55:01
+version v1: 20 responses, 20:54:52 - 20:55:02

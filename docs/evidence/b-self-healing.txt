@@ -1,0 +1,548 @@
+Scenario B: self-healing after terminating one instance
+
+== Timeline
+21:12:11 probe started
+21:12:45 terminate-instances i-08483548f58333652 (eu-north-1a): running shutting-down
+21:14:33 replacement registered in the target group, +109s
+21:15:46 two healthy targets again, +181s after terminate-instances
+21:20:11 probe finished
+
+== Target health every 5 s after terminate-instances
+$ aws elbv2 describe-target-health --target-group-arn <target_group_arn>
+21:12:46 +2s i-01e267cf85a7fa3e4:healthy i-08483548f58333652:healthy 
+21:12:53 +8s i-01e267cf85a7fa3e4:healthy i-08483548f58333652:healthy 
+21:12:59 +15s i-01e267cf85a7fa3e4:healthy i-08483548f58333652:healthy 
+21:13:06 +22s i-01e267cf85a7fa3e4:healthy i-08483548f58333652:healthy 
+21:13:13 +28s i-01e267cf85a7fa3e4:healthy 
+21:13:19 +35s i-01e267cf85a7fa3e4:healthy 
+21:13:26 +42s i-01e267cf85a7fa3e4:healthy 
+21:13:33 +48s i-01e267cf85a7fa3e4:healthy 
+21:13:39 +55s i-01e267cf85a7fa3e4:healthy 
+21:13:46 +62s i-01e267cf85a7fa3e4:healthy 
+21:13:53 +68s i-01e267cf85a7fa3e4:healthy 
+21:13:59 +75s i-01e267cf85a7fa3e4:healthy 
+21:14:06 +82s i-01e267cf85a7fa3e4:healthy 
+21:14:13 +88s i-01e267cf85a7fa3e4:healthy 
+21:14:20 +95s i-01e267cf85a7fa3e4:healthy 
+21:14:26 +102s i-01e267cf85a7fa3e4:healthy 
+21:14:33 +109s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:initial 
+21:14:40 +115s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:initial 
+21:14:46 +122s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:initial 
+21:14:53 +129s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:initial 
+21:15:00 +135s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:06 +142s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:13 +149s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:19 +155s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:26 +162s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:33 +168s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:39 +175s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:unhealthy 
+21:15:46 +181s i-01e267cf85a7fa3e4:healthy i-071ac0b2a384b71a7:healthy 
+
+== Scaling activities
+$ aws autoscaling describe-scaling-activities --auto-scaling-group-name aws-ha-three-tier-app --max-items 4
+  2026-11-21T20:14:23.140000+00:00	2026-11-21T20:14:28+00:00	Successful	Launching a new EC2 instance: i-071ac0b2a384b71a7	At 2026-11-21T20:14:21Z an instance was launched in response to an unhealthy instance needing to be replaced.
+  2026-11-21T20:14:21.309000+00:00	2026-11-21T20:15:13+00:00	Successful	Terminating EC2 instance: i-08483548f58333652	At 2026-11-21T20:14:21Z an instance was taken out of service in response to an EC2 health check indicating it has been terminated or stopped.
+  2026-11-21T19:52:32.787000+00:00	2026-11-21T19:52:38+00:00	Successful	Launching a new EC2 instance: i-01e267cf85a7fa3e4	At 2026-11-21T19:52:26Z a user request created an AutoScalingGroup changing the desired capacity from 0 to 2.  At 2026-11-21T19:52:30Z an instance was started in response to a difference between desired and actual capacity, increasing the capacity from 0 to 2.
+  2026-11-21T19:52:32.616000+00:00	2026-11-21T19:52:37+00:00	Successful	Launching a new EC2 instance: i-08483548f58333652	At 2026-11-21T19:52:26Z a user request created an AutoScalingGroup changing the desired capacity from 0 to 2.  At 2026-11-21T19:52:30Z an instance was started in response to a difference between desired and actual capacity, increasing the capacity from 0 to 2.
+
+== probe.py, one request per second
+$ python scripts/probe.py --url <app_url>/api/info --interval 1 --count 480
+probe /api/info every 1 s, started 2026-11-21T21:12:11+01:00
+21:12:11  200  i-08483548f58333652  eu-north-1a  v1  visits=30  186 ms
+21:12:12  200  i-08483548f58333652  eu-north-1a  v1  visits=31  121 ms
+21:12:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=32  127 ms
+21:12:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=33  128 ms
+21:12:15  200  i-08483548f58333652  eu-north-1a  v1  visits=34  114 ms
+21:12:16  200  i-08483548f58333652  eu-north-1a  v1  visits=35  115 ms
+21:12:17  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=36  118 ms
+21:12:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=37  131 ms
+21:12:19  200  i-08483548f58333652  eu-north-1a  v1  visits=38  132 ms
+21:12:20  200  i-08483548f58333652  eu-north-1a  v1  visits=39  122 ms
+21:12:21  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=40  122 ms
+21:12:22  200  i-08483548f58333652  eu-north-1a  v1  visits=41  117 ms
+21:12:23  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=42  131 ms
+21:12:24  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=43  125 ms
+21:12:25  200  i-08483548f58333652  eu-north-1a  v1  visits=44  198 ms
+21:12:26  200  i-08483548f58333652  eu-north-1a  v1  visits=45  127 ms
+21:12:27  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=46  128 ms
+21:12:28  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=47  120 ms
+21:12:29  200  i-08483548f58333652  eu-north-1a  v1  visits=48  114 ms
+21:12:30  200  i-08483548f58333652  eu-north-1a  v1  visits=49  121 ms
+21:12:31  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=50  140 ms
+21:12:32  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=51  139 ms
+21:12:33  200  i-08483548f58333652  eu-north-1a  v1  visits=52  115 ms
+21:12:34  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=53  141 ms
+21:12:35  200  i-08483548f58333652  eu-north-1a  v1  visits=54  110 ms
+21:12:36  200  i-08483548f58333652  eu-north-1a  v1  visits=55  122 ms
+21:12:37  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=56  123 ms
+21:12:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=57  142 ms
+21:12:39  200  i-08483548f58333652  eu-north-1a  v1  visits=58  108 ms
+21:12:40  200  i-08483548f58333652  eu-north-1a  v1  visits=59  113 ms
+21:12:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=60  168 ms
+21:12:42  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=61  131 ms
+21:12:43  200  i-08483548f58333652  eu-north-1a  v1  visits=62  130 ms
+21:12:44  200  i-08483548f58333652  eu-north-1a  v1  visits=63  138 ms
+21:12:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=64  128 ms
+21:12:46  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=65  123 ms
+21:12:47  ERR  502  108 ms
+21:12:48  ERR  502  92 ms
+21:12:49  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=66  128 ms
+21:12:50  ERR  502  88 ms
+21:12:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=67  118 ms
+21:12:52  ERR  TimeoutError  2042 ms
+21:12:54  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=68  124 ms
+21:12:55  ERR  TimeoutError  2048 ms
+21:12:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=69  125 ms
+21:12:57  ERR  TimeoutError  2048 ms
+21:12:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=70  129 ms
+21:12:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=71  135 ms
+21:12:59  ERR  TimeoutError  2072 ms
+21:13:01  ERR  TimeoutError  2049 ms
+21:13:04  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=72  125 ms
+21:13:04  ERR  TimeoutError  2058 ms
+21:13:06  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=73  175 ms
+21:13:06  ERR  TimeoutError  2047 ms
+21:13:08  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=74  139 ms
+21:13:08  ERR  TimeoutError  2081 ms
+21:13:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=75  135 ms
+21:13:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=76  149 ms
+21:13:10  ERR  TimeoutError  2058 ms
+21:13:12  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=77  175 ms
+21:13:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=78  123 ms
+21:13:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=79  133 ms
+21:13:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=80  125 ms
+21:13:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=81  123 ms
+21:13:15  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=82  117 ms
+21:13:16  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=83  129 ms
+21:13:17  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=84  119 ms
+21:13:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=85  117 ms
+21:13:19  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=86  140 ms
+21:13:20  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=87  138 ms
+21:13:21  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=88  130 ms
+21:13:22  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=89  131 ms
+21:13:23  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=90  111 ms
+21:13:24  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=91  120 ms
+21:13:25  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=92  134 ms
+21:13:26  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=93  128 ms
+21:13:27  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=94  126 ms
+21:13:28  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=95  119 ms
+21:13:29  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=96  130 ms
+21:13:30  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=97  115 ms
+21:13:31  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=98  122 ms
+21:13:32  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=99  125 ms
+21:13:33  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=100  115 ms
+21:13:34  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=101  124 ms
+21:13:35  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=102  135 ms
+21:13:36  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=103  143 ms
+21:13:37  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=104  144 ms
+21:13:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=105  115 ms
+21:13:39  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=106  135 ms
+21:13:40  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=107  118 ms
+21:13:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=108  158 ms
+21:13:42  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=109  123 ms
+21:13:43  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=110  118 ms
+21:13:44  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=111  187 ms
+21:13:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=112  141 ms
+21:13:46  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=113  129 ms
+21:13:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=114  137 ms
+21:13:48  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=115  124 ms
+21:13:49  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=116  117 ms
+21:13:50  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=117  121 ms
+21:13:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=118  123 ms
+21:13:52  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=119  122 ms
+21:13:53  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=120  118 ms
+21:13:54  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=121  123 ms
+21:13:55  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=122  126 ms
+21:13:56  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=123  149 ms
+21:13:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=124  116 ms
+21:13:58  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=125  126 ms
+21:13:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=126  141 ms
+21:14:00  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=127  138 ms
+21:14:01  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=128  118 ms
+21:14:02  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=129  115 ms
+21:14:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=130  117 ms
+21:14:04  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=131  122 ms
+21:14:05  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=132  139 ms
+21:14:06  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=133  116 ms
+21:14:07  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=134  120 ms
+21:14:08  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=135  117 ms
+21:14:09  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=136  124 ms
+21:14:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=137  127 ms
+21:14:11  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=138  121 ms
+21:14:12  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=139  181 ms
+21:14:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=140  127 ms
+21:14:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=141  127 ms
+21:14:15  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=142  129 ms
+21:14:16  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=143  127 ms
+21:14:17  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=144  129 ms
+21:14:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=145  129 ms
+21:14:19  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=146  135 ms
+21:14:20  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=147  126 ms
+21:14:21  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=148  125 ms
+21:14:22  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=149  118 ms
+21:14:23  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=150  124 ms
+21:14:24  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=151  128 ms
+21:14:25  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=152  124 ms
+21:14:26  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=153  120 ms
+21:14:27  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=154  161 ms
+21:14:28  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=155  122 ms
+21:14:29  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=156  141 ms
+21:14:30  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=157  125 ms
+21:14:31  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=158  137 ms
+21:14:32  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=159  121 ms
+21:14:33  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=160  135 ms
+21:14:34  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=161  123 ms
+21:14:35  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=162  142 ms
+21:14:36  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=163  144 ms
+21:14:37  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=164  126 ms
+21:14:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=165  122 ms
+21:14:39  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=166  119 ms
+21:14:40  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=167  128 ms
+21:14:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=168  193 ms
+21:14:42  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=169  126 ms
+21:14:43  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=170  145 ms
+21:14:44  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=171  169 ms
+21:14:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=172  124 ms
+21:14:46  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=173  120 ms
+21:14:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=174  125 ms
+21:14:48  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=175  125 ms
+21:14:49  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=176  126 ms
+21:14:50  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=177  132 ms
+21:14:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=178  124 ms
+21:14:52  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=179  118 ms
+21:14:53  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=180  138 ms
+21:14:54  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=181  122 ms
+21:14:55  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=182  123 ms
+21:14:56  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=183  120 ms
+21:14:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=184  128 ms
+21:14:58  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=185  134 ms
+21:14:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=186  284 ms
+21:15:00  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=187  131 ms
+21:15:01  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=188  126 ms
+21:15:02  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=189  143 ms
+21:15:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=190  125 ms
+21:15:04  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=191  124 ms
+21:15:05  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=192  122 ms
+21:15:06  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=193  131 ms
+21:15:07  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=194  147 ms
+21:15:08  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=195  121 ms
+21:15:09  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=196  125 ms
+21:15:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=197  143 ms
+21:15:11  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=198  139 ms
+21:15:12  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=199  177 ms
+21:15:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=200  142 ms
+21:15:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=201  134 ms
+21:15:15  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=202  138 ms
+21:15:16  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=203  119 ms
+21:15:17  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=204  140 ms
+21:15:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=205  113 ms
+21:15:19  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=206  144 ms
+21:15:20  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=207  121 ms
+21:15:21  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=208  137 ms
+21:15:22  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=209  122 ms
+21:15:23  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=210  121 ms
+21:15:24  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=211  119 ms
+21:15:25  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=212  124 ms
+21:15:26  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=213  130 ms
+21:15:27  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=214  125 ms
+21:15:28  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=215  111 ms
+21:15:29  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=216  122 ms
+21:15:30  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=217  129 ms
+21:15:31  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=218  121 ms
+21:15:32  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=219  121 ms
+21:15:33  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=220  116 ms
+21:15:34  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=221  119 ms
+21:15:35  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=222  119 ms
+21:15:36  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=223  121 ms
+21:15:37  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=224  120 ms
+21:15:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=225  120 ms
+21:15:39  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=226  136 ms
+21:15:40  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=227  123 ms
+21:15:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=228  176 ms
+21:15:42  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=229  140 ms
+21:15:43  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=230  116 ms
+21:15:44  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=231  179 ms
+21:15:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=232  118 ms
+21:15:46  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=233  141 ms
+21:15:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=234  136 ms
+21:15:48  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=235  135 ms
+21:15:49  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=236  133 ms
+21:15:50  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=237  117 ms
+21:15:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=238  123 ms
+21:15:52  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=239  108 ms
+21:15:53  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=240  110 ms
+21:15:54  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=241  139 ms
+21:15:55  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=242  124 ms
+21:15:56  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=243  121 ms
+21:15:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=244  129 ms
+21:15:58  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=245  112 ms
+21:15:59  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=246  134 ms
+21:16:00  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=247  145 ms
+21:16:01  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=248  115 ms
+21:16:02  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=249  116 ms
+21:16:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=250  119 ms
+21:16:04  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=251  114 ms
+21:16:05  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=252  123 ms
+21:16:06  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=253  118 ms
+21:16:07  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=254  276 ms
+21:16:08  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=255  170 ms
+21:16:09  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=256  210 ms
+21:16:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=257  125 ms
+21:16:11  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=258  124 ms
+21:16:12  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=259  131 ms
+21:16:13  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=260  182 ms
+21:16:14  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=261  105 ms
+21:16:15  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=262  121 ms
+21:16:16  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=263  108 ms
+21:16:17  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=264  122 ms
+21:16:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=265  119 ms
+21:16:19  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=266  111 ms
+21:16:20  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=267  105 ms
+21:16:21  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=268  141 ms
+21:16:22  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=269  129 ms
+21:16:23  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=270  122 ms
+21:16:24  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=271  126 ms
+21:16:25  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=272  120 ms
+21:16:26  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=273  117 ms
+21:16:27  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=274  121 ms
+21:16:28  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=275  1115 ms
+21:16:30  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=276  128 ms
+21:16:30  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=277  118 ms
+21:16:31  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=278  115 ms
+21:16:32  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=279  102 ms
+21:16:33  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=280  118 ms
+21:16:34  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=281  114 ms
+21:16:35  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=282  110 ms
+21:16:36  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=283  127 ms
+21:16:37  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=284  136 ms
+21:16:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=285  119 ms
+21:16:39  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=286  116 ms
+21:16:40  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=287  115 ms
+21:16:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=288  196 ms
+21:16:42  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=289  131 ms
+21:16:43  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=290  135 ms
+21:16:44  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=291  139 ms
+21:16:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=292  130 ms
+21:16:46  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=293  115 ms
+21:16:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=294  147 ms
+21:16:48  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=295  124 ms
+21:16:49  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=296  126 ms
+21:16:50  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=297  131 ms
+21:16:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=298  144 ms
+21:16:52  ERR  502  108 ms
+21:16:53  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=299  125 ms
+21:16:54  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=300  130 ms
+21:16:55  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=301  139 ms
+21:16:56  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=302  123 ms
+21:16:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=303  114 ms
+21:16:58  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=304  115 ms
+21:16:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=305  136 ms
+21:17:00  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=306  133 ms
+21:17:01  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=307  123 ms
+21:17:02  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=308  134 ms
+21:17:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=309  133 ms
+21:17:04  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=310  120 ms
+21:17:05  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=311  121 ms
+21:17:06  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=312  128 ms
+21:17:07  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=313  114 ms
+21:17:08  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=314  103 ms
+21:17:09  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=315  139 ms
+21:17:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=316  125 ms
+21:17:11  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=317  117 ms
+21:17:12  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=318  139 ms
+21:17:13  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=319  143 ms
+21:17:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=320  170 ms
+21:17:15  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=321  126 ms
+21:17:16  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=322  123 ms
+21:17:17  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=323  111 ms
+21:17:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=324  127 ms
+21:17:19  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=325  128 ms
+21:17:20  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=326  146 ms
+21:17:21  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=327  127 ms
+21:17:22  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=328  149 ms
+21:17:23  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=329  131 ms
+21:17:24  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=330  217 ms
+21:17:25  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=331  143 ms
+21:17:26  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=332  125 ms
+21:17:27  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=333  116 ms
+21:17:28  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=334  121 ms
+21:17:29  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=335  113 ms
+21:17:30  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=336  118 ms
+21:17:31  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=337  137 ms
+21:17:32  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=338  119 ms
+21:17:33  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=339  130 ms
+21:17:34  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=340  119 ms
+21:17:35  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=341  129 ms
+21:17:36  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=342  113 ms
+21:17:37  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=343  142 ms
+21:17:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=344  149 ms
+21:17:39  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=345  114 ms
+21:17:40  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=346  107 ms
+21:17:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=347  162 ms
+21:17:42  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=348  144 ms
+21:17:43  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=349  121 ms
+21:17:44  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=350  215 ms
+21:17:45  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=351  113 ms
+21:17:46  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=352  117 ms
+21:17:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=353  143 ms
+21:17:48  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=354  134 ms
+21:17:49  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=355  128 ms
+21:17:50  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=356  113 ms
+21:17:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=357  129 ms
+21:17:52  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=358  106 ms
+21:17:53  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=359  144 ms
+21:17:54  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=360  134 ms
+21:17:55  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=361  117 ms
+21:17:56  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=362  137 ms
+21:17:57  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=363  123 ms
+21:17:58  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=364  113 ms
+21:17:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=365  134 ms
+21:18:00  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=366  133 ms
+21:18:01  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=367  126 ms
+21:18:02  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=368  127 ms
+21:18:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=369  133 ms
+21:18:04  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=370  130 ms
+21:18:05  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=371  120 ms
+21:18:06  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=372  124 ms
+21:18:07  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=373  106 ms
+21:18:08  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=374  112 ms
+21:18:09  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=375  124 ms
+21:18:10  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=376  134 ms
+21:18:11  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=377  124 ms
+21:18:12  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=378  122 ms
+21:18:13  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=379  111 ms
+21:18:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=380  119 ms
+21:18:15  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=381  172 ms
+21:18:16  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=382  113 ms
+21:18:17  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=383  126 ms
+21:18:18  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=384  132 ms
+21:18:19  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=385  113 ms
+21:18:20  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=386  123 ms
+21:18:21  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=387  132 ms
+21:18:22  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=388  139 ms
+21:18:23  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=389  120 ms
+21:18:24  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=390  135 ms
+21:18:25  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=391  122 ms
+21:18:26  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=392  110 ms
+21:18:27  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=393  129 ms
+21:18:28  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=394  133 ms
+21:18:29  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=395  127 ms
+21:18:30  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=396  106 ms
+21:18:31  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=397  108 ms
+21:18:32  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=398  130 ms
+21:18:33  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=399  114 ms
+21:18:34  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=400  134 ms
+21:18:35  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=401  140 ms
+21:18:36  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=402  122 ms
+21:18:37  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=403  112 ms
+21:18:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=404  121 ms
+21:18:39  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=405  115 ms
+21:18:40  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=406  111 ms
+21:18:41  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=407  188 ms
+21:18:42  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=408  114 ms
+21:18:43  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=409  114 ms
+21:18:44  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=410  180 ms
+21:18:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=411  119 ms
+21:18:46  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=412  123 ms
+21:18:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=413  129 ms
+21:18:48  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=414  117 ms
+21:18:49  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=415  130 ms
+21:18:50  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=416  140 ms
+21:18:51  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=417  127 ms
+21:18:52  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=418  113 ms
+21:18:53  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=419  125 ms
+21:18:54  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=420  130 ms
+21:18:55  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=421  108 ms
+21:18:56  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=422  139 ms
+21:18:57  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=423  110 ms
+21:18:58  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=424  121 ms
+21:18:59  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=425  159 ms
+21:19:00  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=426  120 ms
+21:19:01  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=427  122 ms
+21:19:02  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=428  109 ms
+21:19:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=429  123 ms
+21:19:04  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=430  118 ms
+21:19:05  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=431  119 ms
+21:19:06  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=432  129 ms
+21:19:07  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=433  123 ms
+21:19:08  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=434  117 ms
+21:19:09  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=435  142 ms
+21:19:10  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=436  115 ms
+21:19:11  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=437  110 ms
+21:19:12  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=438  128 ms
+21:19:13  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=439  112 ms
+21:19:14  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=440  130 ms
+21:19:15  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=441  142 ms
+21:19:16  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=442  156 ms
+21:19:17  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=443  104 ms
+21:19:18  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=444  142 ms
+21:19:19  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=445  122 ms
+21:19:20  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=446  119 ms
+21:19:21  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=447  114 ms
+21:19:22  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=448  121 ms
+21:19:23  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=449  136 ms
+21:19:24  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=450  113 ms
+21:19:25  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=451  114 ms
+21:19:26  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=452  137 ms
+21:19:27  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=453  134 ms
+21:19:28  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=454  117 ms
+21:19:29  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=455  114 ms
+21:19:30  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=456  122 ms
+21:19:31  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=457  127 ms
+21:19:32  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=458  110 ms
+21:19:33  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=459  135 ms
+21:19:34  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=460  112 ms
+21:19:35  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=461  107 ms
+21:19:36  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=462  130 ms
+21:19:37  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=463  126 ms
+21:19:38  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=464  123 ms
+21:19:39  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=465  141 ms
+21:19:40  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=466  131 ms
+21:19:41  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=467  166 ms
+21:19:42  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=468  119 ms
+21:19:43  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=469  126 ms
+21:19:44  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=470  170 ms
+21:19:45  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=471  123 ms
+21:19:46  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=472  110 ms
+21:19:47  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=473  121 ms
+21:19:48  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=474  133 ms
+21:19:49  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=475  128 ms
+21:19:50  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=476  123 ms
+21:19:51  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=477  117 ms
+21:19:52  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=478  118 ms
+21:19:53  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=479  119 ms
+21:19:54  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=480  122 ms
+21:19:55  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=481  123 ms
+21:19:56  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=482  113 ms
+21:19:57  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=483  119 ms
+21:19:58  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=484  138 ms
+21:19:59  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=485  120 ms
+21:20:00  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=486  143 ms
+21:20:01  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=487  122 ms
+21:20:02  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=488  118 ms
+21:20:03  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=489  116 ms
+21:20:04  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=490  131 ms
+21:20:05  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=491  117 ms
+21:20:06  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=492  123 ms
+21:20:07  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=493  111 ms
+21:20:08  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=494  121 ms
+21:20:09  200  i-01e267cf85a7fa3e4  eu-north-1b  v1  visits=495  145 ms
+21:20:10  200  i-071ac0b2a384b71a7  eu-north-1a  v1  visits=496  114 ms
+
+requests 480, ok 467, errors 13
+errors by kind {'502': 4, 'TimeoutError': 9}, first at 21:12:47, last at 21:16:52
+instance i-08483548f58333652 (eu-north-1a): 18 responses, 21:12:11 - 21:12:44
+instance i-01e267cf85a7fa3e4 (eu-north-1b): 317 responses, 21:12:13 - 21:20:09
+instance i-071ac0b2a384b71a7 (eu-north-1a): 132 responses, 21:15:46 - 21:20:10
+version v1: 467 responses, 21:12:11 - 21:20:10
+
+== Follow-up checks after the run
+The 502 at 21:16:52 came one minute after both targets were healthy again, outside the termination window.
+$ aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB (1-minute sums, 21:10-21:21)
+  HTTPCode_ELB_502_Count     21:12 -> 3, 21:16 -> 1
+  HTTPCode_Target_5XX_Count  no datapoints: the app itself returned no 5xx
+$ systemctl show app -p NRestarts (SSM Run Command on both instances)
+  i-01e267cf85a7fa3e4  NRestarts=0, no app log lines between 21:12 and 21:20
+  i-071ac0b2a384b71a7  NRestarts=0, app started at 21:15:14
+$ aws elbv2 describe-load-balancer-attributes (idle_timeout.timeout_seconds) -> 60
+$ gunicorn --help (on the instance, gunicorn 27.0.1) -> --keep-alive default 2

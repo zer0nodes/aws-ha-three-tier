@@ -1,0 +1,90 @@
+Scenario C: target tracking scale-out and scale-in
+
+== Timeline
+22:02:34 load test started (16 workers, /work?ms=200, 600 s)
+22:07:26 desired capacity 3, +283s after load start
+22:13:11 load test finished, +631s
+22:28:55 back to 2 instances, +944s after load end
+
+== Every 30 s: ASG capacity, healthy targets, average CPU of the group (latest 1-min datapoint), target tracking alarms
+time      elapsed desired  inservice healthy  cpu    alarms (state threshold)
+22:02:44  +0s     2        2         2        0.5    High OK 50.0 Low ALARM 35.0 
+22:03:37  +40s    2        2         2        5.6    High OK 50.0 Low ALARM 35.0 
+22:04:15  +93s    2        2         2        67.8   High OK 50.0 Low ALARM 35.0 
+22:04:53  +131s   2        2         2        67.8   High OK 50.0 Low OK 35.0 
+22:05:31  +169s   2        2         2        64.9   High OK 50.0 Low OK 35.0 
+22:06:09  +207s   2        2         2        72.2   High OK 50.0 Low OK 35.0 
+22:06:47  +245s   2        2         2        72.2   High OK 50.0 Low OK 35.0 
+22:07:25  +283s   3        3         2        44.1   High ALARM 50.0 Low OK 35.0 
+22:08:05  +322s   3        3         2        64.3   High OK 50.0 Low OK 35.0 
+22:08:44  +361s   3        3         3        64.3   High OK 50.0 Low OK 35.0 
+22:09:22  +400s   3        3         3        58.3   High OK 50.0 Low OK 35.0 
+22:10:00  +438s   3        3         3        58.3   High OK 50.0 Low OK 35.0 
+22:10:39  +476s   3        3         3        55.3   High OK 50.0 Low OK 35.0 
+22:11:19  +515s   3        3         3        45.0   High ALARM 50.0 Low OK 35.0 
+22:11:57  +556s   3        3         3        45.0   High OK 50.0 Low OK 35.0 
+22:12:35  +593s   3        3         3        58.7   High OK 50.0 Low OK 35.0 
+22:13:11  +631s   3        3         3        62.6   High OK 50.0 Low OK 35.0 
+22:13:47  +667s   3        3         3        62.6   High OK 50.0 Low OK 35.0 
+22:14:23  +703s   3        3         3        18.3   High OK 50.0 Low OK 35.0 
+22:14:58  +739s   3        3         3        18.3   High OK 50.0 Low OK 35.0 
+22:15:34  +774s   3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:16:09  +810s   3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:16:45  +845s   3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:17:20  +881s   3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:17:56  +916s   3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:18:31  +952s   3        3         3        0.6    High OK 50.0 Low OK 35.0 
+22:19:07  +987s   3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:19:42  +1023s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:20:18  +1058s  3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:20:53  +1094s  3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:21:29  +1129s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:22:06  +1165s  3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:22:45  +1202s  3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:23:22  +1241s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:24:00  +1278s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:24:37  +1316s  3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:25:13  +1353s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:25:50  +1389s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:26:27  +1426s  3        3         3        0.6    High OK 50.0 Low OK 35.0 
+22:27:05  +1463s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:27:43  +1501s  3        3         3        0.3    High OK 50.0 Low OK 35.0 
+22:28:19  +1539s  3        3         3        0.2    High OK 50.0 Low OK 35.0 
+22:28:55  +1575s  2        2         2        0.2    High OK 50.0 Low ALARM 35.0 
+
+== Scaling activities
+$ aws autoscaling describe-scaling-activities --auto-scaling-group-name aws-ha-three-tier-app --max-items 8
+  2026-11-21T21:28:38.131000+00:00	None	WaitingForELBConnectionDraining	Terminating EC2 instance: i-061fa15e57c9186f2 - Waiting For ELB Connection Draining.	At 2026-11-21T21:28:25Z a monitor alarm TargetTracking-aws-ha-three-tier-app-AlarmLow-9b091dc4-0eef-4bc0-8ffe-4a12e9b51a36 in state ALARM triggered policy aws-ha-three-tier-cpu-target changing the desired capacity from 3 to 2.  At 2026-11-21T21:28:37Z an instance was taken out of service in response to a difference between desired and actual capacity, shrinking the capacity from 3 to 2.  At 2026-11-21T21:28:38Z instance i-061fa15e57c9186f2 was selected for termination.
+  2026-11-21T21:06:58.836000+00:00	2026-11-21T21:12:03+00:00	Successful	Launching a new EC2 instance: i-061fa15e57c9186f2	At 2026-11-21T21:06:47Z a monitor alarm TargetTracking-aws-ha-three-tier-app-AlarmHigh-01b1296c-66c8-41a3-8a46-436760e2ad82 in state ALARM triggered policy aws-ha-three-tier-cpu-target changing the desired capacity from 2 to 3.  At 2026-11-21T21:06:57Z an instance was started in response to a difference between desired and actual capacity, increasing the capacity from 2 to 3.
+  2026-11-21T20:47:30.566000+00:00	2026-11-21T20:52:35+00:00	Successful	Launching a new EC2 instance: i-0194df9ec77816e89	At 2026-11-21T20:47:28Z an instance was launched in response to an instance refresh.
+  2026-11-21T20:47:28.651000+00:00	2026-11-21T20:48:41+00:00	Successful	Terminating EC2 instance: i-02d5d5485689a67a5	At 2026-11-21T20:47:28Z an instance was taken out of service in response to an instance refresh.
+  2026-11-21T20:42:18.560000+00:00	2026-11-21T20:47:23+00:00	Successful	Launching a new EC2 instance: i-0b52d6ca28a1232fe	At 2026-11-21T20:42:16Z an instance was launched in response to an instance refresh.
+  2026-11-21T20:42:16.872000+00:00	2026-11-21T20:43:29+00:00	Successful	Terminating EC2 instance: i-00b4ffc9294ba3599	At 2026-11-21T20:42:16Z an instance was taken out of service in response to an instance refresh.
+  2026-11-21T20:35:39.149000+00:00	2026-11-21T20:40:43+00:00	Successful	Launching a new EC2 instance: i-02d5d5485689a67a5	At 2026-11-21T20:35:37Z an instance was launched in response to an instance refresh.
+  2026-11-21T20:35:37.395000+00:00	2026-11-21T20:36:29+00:00	Successful	Terminating EC2 instance: i-071ac0b2a384b71a7	At 2026-11-21T20:35:37Z an instance was taken out of service in response to an instance refresh.
+
+== load_test.py
+$ python scripts/load_test.py --url <app_url> --path "/work?ms=200" --concurrency 16 --duration 600
+load test /work?ms=200, 16 workers, 600 s, started 2026-11-21T22:02:35+01:00
+22:03:05  +30s  1383 requests, 45.9/s, errors 0, p50 339 ms, p95 404 ms
+22:03:35  +60s  563 requests, 18.8/s, errors 0, p50 335 ms, p95 407 ms
+22:04:05  +90s  1208 requests, 40.4/s, errors 14 {'TimeoutError': 14}, p50 337 ms, p95 428 ms
+22:04:35  +120s  769 requests, 25.6/s, errors 0, p50 337 ms, p95 408 ms
+22:05:05  +150s  1111 requests, 37.1/s, errors 0, p50 330 ms, p95 425 ms
+22:05:35  +180s  837 requests, 27.8/s, errors 0, p50 336 ms, p95 438 ms
+22:06:05  +210s  920 requests, 30.8/s, errors 0, p50 332 ms, p95 1331 ms
+22:06:35  +240s  49 requests, 1.6/s, errors 0, p50 10324 ms, p95 10373 ms
+22:07:05  +270s  939 requests, 31.4/s, errors 0, p50 338 ms, p95 413 ms
+22:07:35  +300s  999 requests, 33.2/s, errors 0, p50 337 ms, p95 408 ms
+22:08:05  +330s  478 requests, 15.9/s, errors 1 {'TimeoutError': 1}, p50 342 ms, p95 10303 ms
+22:08:35  +360s  1290 requests, 43.1/s, errors 0, p50 327 ms, p95 429 ms
+22:09:05  +390s  666 requests, 22.1/s, errors 0, p50 314 ms, p95 466 ms
+22:09:35  +420s  763 requests, 25.6/s, errors 0, p50 322 ms, p95 383 ms
+22:10:05  +450s  195 requests, 6.5/s, errors 16 {'TimeoutError': 16}, p50 304 ms, p95 343 ms
+22:10:35  +480s  1165 requests, 39.0/s, errors 11 {'TimeoutError': 11}, p50 321 ms, p95 394 ms
+22:11:05  +510s  784 requests, 26.0/s, errors 0, p50 324 ms, p95 421 ms
+22:11:35  +540s  888 requests, 29.7/s, errors 0, p50 318 ms, p95 431 ms
+22:12:05  +570s  1064 requests, 35.4/s, errors 0, p50 319 ms, p95 470 ms
+22:12:35  +600s  802 requests, 26.8/s, errors 0, p50 322 ms, p95 1322 ms
+
+total: 16889 requests, 28.1/s, errors 42 {'TimeoutError': 42}, p50 329 ms, p95 432 ms

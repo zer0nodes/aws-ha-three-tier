@@ -1,0 +1,50 @@
+Scenario E: network isolation
+Subnet IDs are replaced by their Name tag without the project prefix, security group IDs by alb-sg, app-sg and db-sg.
+
+== 1. App instances have no public IP
+$ aws ec2 describe-instances --filters tag:aws:autoscaling:groupName=aws-ha-three-tier-app instance-state-name=running
+  instance              zone                  subnet                private-ip            public-ip
+  i-08483548f58333652   eu-north-1a           app-a                 10.10.10.226          none
+  i-01e267cf85a7fa3e4   eu-north-1b           app-b                 10.10.11.239          none
+
+== 2. No subnet assigns public IPs on launch
+$ aws ec2 describe-subnets --filters vpc-id=<project VPC>
+  subnet                cidr                  zone                  map-public-ip
+  public-a              10.10.0.0/24          eu-north-1a           False
+  public-b              10.10.1.0/24          eu-north-1b           False
+  app-a                 10.10.10.0/24         eu-north-1a           False
+  app-b                 10.10.11.0/24         eu-north-1b           False
+  db-a                  10.10.20.0/24         eu-north-1a           False
+  db-b                  10.10.21.0/24         eu-north-1b           False
+
+== 3. RDS is not publicly accessible
+$ aws rds describe-db-instances --db-instance-identifier aws-ha-three-tier-db
+  identifier            publicly-accessible   multi-az              zone                  subnet-group-subnets
+  aws-ha-three-tier-db  False                 False                 eu-north-1a           db-a db-b
+
+== 4. Route tables: the db tier has no route to the internet
+$ aws ec2 describe-route-tables --filters tag:Name=aws-ha-three-tier-public
+  associated subnets: public-b public-a
+  destination           target                state
+  10.10.0.0/16          local                 active
+  0.0.0.0/0             igw-07710b0d763d4c9e6 active
+$ aws ec2 describe-route-tables --filters tag:Name=aws-ha-three-tier-app
+  associated subnets: app-b app-a
+  destination           target                state
+  10.10.0.0/16          local                 active
+  0.0.0.0/0             nat-0a629268cc22ddeb9 active
+$ aws ec2 describe-route-tables --filters tag:Name=aws-ha-three-tier-db
+  associated subnets: db-b db-a
+  destination           target                state
+  10.10.0.0/16          local                 active
+
+== 5. Rules between tiers reference security groups, not addresses
+$ aws ec2 describe-security-group-rules --filters group-id=alb-sg,app-sg,db-sg
+  group       direction   protocol    port        peer        description
+  alb-sg      ingress     tcp         80          0.0.0.0/0   HTTP from allowed CIDRs
+  alb-sg      egress      tcp         8080        app-sg      To app instances
+  app-sg      ingress     tcp         8080        alb-sg      From the load balancer
+  app-sg      egress      tcp         443         0.0.0.0/0   HTTPS to AWS APIs and package repositories
+  app-sg      egress      tcp         5432        db-sg       To PostgreSQL
+  db-sg       ingress     tcp         5432        app-sg      PostgreSQL from app instances
+  egress rules in db-sg: 0
