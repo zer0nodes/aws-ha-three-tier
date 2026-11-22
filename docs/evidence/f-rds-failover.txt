@@ -1,0 +1,364 @@
+Scenario F: RDS Multi-AZ conversion and forced failover
+
+Endpoint ip: A record of the RDS endpoint from the AWS authoritative name server (TTL 5 s), hostname left out.
+
+== Part 1: conversion to Multi-AZ with probe.py on /api/info
+$ terraform -chdir=infra plan -var db_multi_az=true -out=phase7-maz.tfplan   (0 to add, 2 to change, 0 to destroy: multi_az false -> true; IAM policy read-db-secret re-read during apply because its data source depends on the database)
+$ terraform -chdir=infra apply phase7-maz.tfplan
+
+-- Timeline
+00:53:07 probe /api/info started: 1 request per second, timeout 5 s
+00:53:09 before: status multi_az zone secondary_zone pending_multi_az = available False eu-north-1b None None; endpoint ip 10.10.21.230
+00:53:11 IAM policy read-db-secret: document hash 8c29d468a568
+00:53:41 terraform apply phase7-maz.tfplan (multi_az: false -> true)
+01:01:10 terraform apply finished: exit 0, +449s
+  terraform: aws_db_instance.main: Modifications complete after 7m17s
+  terraform: Apply complete! Resources: 0 added, 1 changed, 0 destroyed.
+01:01:13 IAM policy read-db-secret after apply: document hash 8c29d468a568 (unchanged)
+01:02:24 probe stopped
+
+-- RDS every 10 s, logged on change: status multi_az zone secondary_zone pending_multi_az | endpoint ip
+00:53:42 +0s available False eu-north-1b None None | ip 10.10.21.230
+00:53:54 +12s modifying False eu-north-1b None True | ip 10.10.21.230
+00:59:25 +343s configuring-enhanced-monitoring True eu-north-1b None None | ip 10.10.21.230
+01:00:24 +402s configuring-enhanced-monitoring True eu-north-1b eu-north-1a None | ip 10.10.21.230
+01:00:36 +413s available True eu-north-1b eu-north-1a None | ip 10.10.21.230
+01:01:10 +449s available True eu-north-1b eu-north-1a None | ip 10.10.21.230
+
+-- RDS events
+00:53:45  Applying modification to convert to a Multi-AZ DB Instance
+00:59:24  Finished applying modification to convert to a Multi-AZ DB Instance
+
+-- probe.py /api/info, one request per second, timeout 5 s
+requests 570, ok 570, errors 0, max 924 ms
+minute  requests  ok  errors  max_ms
+00:53         54   54       0     209
+00:54         61   61       0     154
+00:55         61   61       0     173
+00:56         62   62       0     270
+00:57         61   61       0     181
+00:58         62   62       0     167
+00:59         62   62       0     924
+01:00         61   61       0     317
+01:01         62   62       0     832
+01:02         24   24       0     167
+errors: 0
+
+== Part 2: forced failover
+$ aws rds reboot-db-instance --db-instance-identifier aws-ha-three-tier-db --force-failover
+
+-- Timeline
+01:35:10 before: status zone secondary_zone = available eu-north-1b eu-north-1a; standby storage operation None None; endpoint ip 10.10.21.230; targets i-0961f552e761032ad:healthy i-0b700cccfdb36e749:healthy ; scaling activities so far 2; alarm aws-ha-three-tier-target-5xx OK
+01:35:11 probes started: /api/info and /health, 1 request per second each, timeout 5 s
+01:35:42 aws rds reboot-db-instance --db-instance-identifier aws-ha-three-tier-db --force-failover -> status rebooting
+01:39:18 instance available and 180 s since the last /api/info error
+01:39:35 probes stopped
+01:39:42 after: status zone secondary_zone = available eu-north-1b eu-north-1a; endpoint ip 10.10.20.42; targets i-0961f552e761032ad:healthy i-0b700cccfdb36e749:healthy ; scaling activities 2 (before 2); alarm aws-ha-three-tier-target-5xx ALARM
+
+-- RDS events
+01:35:53  Multi-AZ instance failover started. 
+01:36:10  DB instance restarted
+01:36:27  Multi-AZ instance failover completed
+01:36:27  The user requested a failover of the DB instance.
+
+-- Every 5 s, logged on change: status zone secondary_zone | endpoint ip | target health | scaling activities | alarm aws-ha-three-tier-target-5xx
+01:35:48 +1s rebooting eu-north-1b eu-north-1a | ip 10.10.21.230 | i-0961f552e761032ad:healthy i-0b700cccfdb36e749:healthy | activities 2 | alarm OK
+01:36:10 +23s rebooting eu-north-1b eu-north-1a | ip 10.10.20.42 | i-0961f552e761032ad:healthy i-0b700cccfdb36e749:healthy | activities 2 | alarm OK
+01:37:05 +78s available eu-north-1b eu-north-1a | ip 10.10.20.42 | i-0961f552e761032ad:healthy i-0b700cccfdb36e749:healthy | activities 2 | alarm OK
+01:39:07 +200s available eu-north-1b eu-north-1a | ip 10.10.20.42 | i-0961f552e761032ad:healthy i-0b700cccfdb36e749:healthy | activities 2 | alarm ALARM
+
+-- Alarm history: aws-ha-three-tier-target-5xx
+01:38:56  Alarm updated from OK to ALARM
+
+-- probe.py /health, one request per second, timeout 5 s
+requests 270, ok 270, errors 0, max 1105 ms
+minute  requests  ok  errors  max_ms
+01:35         50   50       0     161
+01:36         61   61       0    1104
+01:37         62   62       0     149
+01:38         61   61       0     134
+01:39         36   36       0    1105
+
+-- probe.py /api/info, one request per second, timeout 5 s
+requests 270, ok 256, errors 14, max 5078 ms
+errors by kind: 503 x13 TimeoutError x1
+first error 01:35:52, last error 01:36:05: errors span 14 s
+last 200 before 01:35:51, first 200 after 01:36:06: no database for at most 15 s
+minute  requests  ok  errors  max_ms
+01:35         50   42       8    5078
+01:36         61   55       6     186
+01:37         62   62       0    1149
+01:38         61   61       0     177
+01:39         36   36       0    1139
+
+-- probe.py /api/info, every request
+01:35:11  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=585  236 ms
+01:35:12  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=586  120 ms
+01:35:13  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=587  118 ms
+01:35:14  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=588  129 ms
+01:35:15  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=589  120 ms
+01:35:16  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=590  122 ms
+01:35:17  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=591  122 ms
+01:35:18  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=592  120 ms
+01:35:19  200  i-0961f552e761032ad  eu-north-1b  v1  visits=593  109 ms
+01:35:20  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=594  138 ms
+01:35:21  200  i-0961f552e761032ad  eu-north-1b  v1  visits=595  111 ms
+01:35:22  200  i-0961f552e761032ad  eu-north-1b  v1  visits=596  109 ms
+01:35:23  200  i-0961f552e761032ad  eu-north-1b  v1  visits=597  117 ms
+01:35:24  200  i-0961f552e761032ad  eu-north-1b  v1  visits=598  112 ms
+01:35:25  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=599  124 ms
+01:35:26  200  i-0961f552e761032ad  eu-north-1b  v1  visits=600  115 ms
+01:35:27  200  i-0961f552e761032ad  eu-north-1b  v1  visits=601  112 ms
+01:35:28  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=602  138 ms
+01:35:29  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=603  120 ms
+01:35:30  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=604  122 ms
+01:35:31  200  i-0961f552e761032ad  eu-north-1b  v1  visits=605  129 ms
+01:35:32  200  i-0961f552e761032ad  eu-north-1b  v1  visits=606  113 ms
+01:35:33  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=607  144 ms
+01:35:34  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=608  122 ms
+01:35:35  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=609  118 ms
+01:35:36  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=610  120 ms
+01:35:37  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=611  138 ms
+01:35:38  200  i-0961f552e761032ad  eu-north-1b  v1  visits=612  130 ms
+01:35:39  200  i-0961f552e761032ad  eu-north-1b  v1  visits=613  116 ms
+01:35:40  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=614  131 ms
+01:35:40  200  i-0961f552e761032ad  eu-north-1b  v1  visits=615  138 ms
+01:35:41  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=616  149 ms
+01:35:42  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=617  132 ms
+01:35:43  200  i-0961f552e761032ad  eu-north-1b  v1  visits=618  127 ms
+01:35:44  200  i-0961f552e761032ad  eu-north-1b  v1  visits=619  131 ms
+01:35:45  200  i-0961f552e761032ad  eu-north-1b  v1  visits=620  115 ms
+01:35:46  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=621  130 ms
+01:35:47  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=622  129 ms
+01:35:48  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=623  128 ms
+01:35:49  200  i-0961f552e761032ad  eu-north-1b  v1  visits=624  117 ms
+01:35:50  200  i-0961f552e761032ad  eu-north-1b  v1  visits=625  301 ms
+01:35:51  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=626  145 ms
+01:35:52  ERR  TimeoutError  5078 ms
+01:35:57  ERR  503  109 ms
+01:35:57  ERR  503  107 ms
+01:35:57  ERR  503  114 ms
+01:35:57  ERR  503  105 ms
+01:35:57  ERR  503  92 ms
+01:35:58  ERR  503  91 ms
+01:35:59  ERR  503  96 ms
+01:36:00  ERR  503  116 ms
+01:36:01  ERR  503  108 ms
+01:36:02  ERR  503  101 ms
+01:36:03  ERR  503  101 ms
+01:36:04  ERR  503  92 ms
+01:36:05  ERR  503  94 ms
+01:36:06  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=627  186 ms
+01:36:07  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=628  112 ms
+01:36:08  200  i-0961f552e761032ad  eu-north-1b  v1  visits=629  147 ms
+01:36:09  200  i-0961f552e761032ad  eu-north-1b  v1  visits=630  124 ms
+01:36:09  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=631  145 ms
+01:36:10  200  i-0961f552e761032ad  eu-north-1b  v1  visits=632  133 ms
+01:36:11  200  i-0961f552e761032ad  eu-north-1b  v1  visits=633  179 ms
+01:36:12  200  i-0961f552e761032ad  eu-north-1b  v1  visits=634  130 ms
+01:36:13  200  i-0961f552e761032ad  eu-north-1b  v1  visits=635  149 ms
+01:36:14  200  i-0961f552e761032ad  eu-north-1b  v1  visits=636  146 ms
+01:36:15  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=637  116 ms
+01:36:16  200  i-0961f552e761032ad  eu-north-1b  v1  visits=638  148 ms
+01:36:17  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=639  111 ms
+01:36:18  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=640  134 ms
+01:36:19  200  i-0961f552e761032ad  eu-north-1b  v1  visits=641  137 ms
+01:36:20  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=642  114 ms
+01:36:21  200  i-0961f552e761032ad  eu-north-1b  v1  visits=643  121 ms
+01:36:22  200  i-0961f552e761032ad  eu-north-1b  v1  visits=644  125 ms
+01:36:23  200  i-0961f552e761032ad  eu-north-1b  v1  visits=645  139 ms
+01:36:24  200  i-0961f552e761032ad  eu-north-1b  v1  visits=646  121 ms
+01:36:25  200  i-0961f552e761032ad  eu-north-1b  v1  visits=647  128 ms
+01:36:26  200  i-0961f552e761032ad  eu-north-1b  v1  visits=648  126 ms
+01:36:27  200  i-0961f552e761032ad  eu-north-1b  v1  visits=649  126 ms
+01:36:28  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=650  112 ms
+01:36:29  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=651  110 ms
+01:36:30  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=652  115 ms
+01:36:31  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=653  115 ms
+01:36:32  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=654  120 ms
+01:36:33  200  i-0961f552e761032ad  eu-north-1b  v1  visits=655  128 ms
+01:36:34  200  i-0961f552e761032ad  eu-north-1b  v1  visits=656  127 ms
+01:36:35  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=657  125 ms
+01:36:36  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=658  127 ms
+01:36:37  200  i-0961f552e761032ad  eu-north-1b  v1  visits=659  140 ms
+01:36:38  200  i-0961f552e761032ad  eu-north-1b  v1  visits=660  120 ms
+01:36:39  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=661  154 ms
+01:36:40  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=662  116 ms
+01:36:41  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=663  114 ms
+01:36:42  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=664  105 ms
+01:36:43  200  i-0961f552e761032ad  eu-north-1b  v1  visits=665  118 ms
+01:36:44  200  i-0961f552e761032ad  eu-north-1b  v1  visits=666  124 ms
+01:36:45  200  i-0961f552e761032ad  eu-north-1b  v1  visits=667  128 ms
+01:36:46  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=668  119 ms
+01:36:47  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=669  103 ms
+01:36:48  200  i-0961f552e761032ad  eu-north-1b  v1  visits=670  127 ms
+01:36:49  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=671  118 ms
+01:36:50  200  i-0961f552e761032ad  eu-north-1b  v1  visits=672  130 ms
+01:36:51  200  i-0961f552e761032ad  eu-north-1b  v1  visits=673  126 ms
+01:36:52  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=674  115 ms
+01:36:53  200  i-0961f552e761032ad  eu-north-1b  v1  visits=675  124 ms
+01:36:54  200  i-0961f552e761032ad  eu-north-1b  v1  visits=676  129 ms
+01:36:55  200  i-0961f552e761032ad  eu-north-1b  v1  visits=677  130 ms
+01:36:56  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=678  122 ms
+01:36:57  200  i-0961f552e761032ad  eu-north-1b  v1  visits=679  119 ms
+01:36:58  200  i-0961f552e761032ad  eu-north-1b  v1  visits=680  125 ms
+01:36:59  200  i-0961f552e761032ad  eu-north-1b  v1  visits=681  121 ms
+01:37:00  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=682  110 ms
+01:37:01  200  i-0961f552e761032ad  eu-north-1b  v1  visits=683  131 ms
+01:37:02  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=684  111 ms
+01:37:03  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=685  119 ms
+01:37:04  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=686  115 ms
+01:37:05  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=687  120 ms
+01:37:06  200  i-0961f552e761032ad  eu-north-1b  v1  visits=688  136 ms
+01:37:07  200  i-0961f552e761032ad  eu-north-1b  v1  visits=689  120 ms
+01:37:08  200  i-0961f552e761032ad  eu-north-1b  v1  visits=690  137 ms
+01:37:08  200  i-0961f552e761032ad  eu-north-1b  v1  visits=691  163 ms
+01:37:09  200  i-0961f552e761032ad  eu-north-1b  v1  visits=692  1149 ms
+01:37:10  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=693  111 ms
+01:37:11  200  i-0961f552e761032ad  eu-north-1b  v1  visits=694  115 ms
+01:37:12  200  i-0961f552e761032ad  eu-north-1b  v1  visits=695  120 ms
+01:37:13  200  i-0961f552e761032ad  eu-north-1b  v1  visits=696  120 ms
+01:37:14  200  i-0961f552e761032ad  eu-north-1b  v1  visits=697  120 ms
+01:37:15  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=698  122 ms
+01:37:16  200  i-0961f552e761032ad  eu-north-1b  v1  visits=699  109 ms
+01:37:17  200  i-0961f552e761032ad  eu-north-1b  v1  visits=700  121 ms
+01:37:18  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=701  117 ms
+01:37:19  200  i-0961f552e761032ad  eu-north-1b  v1  visits=702  131 ms
+01:37:20  200  i-0961f552e761032ad  eu-north-1b  v1  visits=703  119 ms
+01:37:21  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=704  108 ms
+01:37:22  200  i-0961f552e761032ad  eu-north-1b  v1  visits=705  114 ms
+01:37:23  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=706  117 ms
+01:37:24  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=707  107 ms
+01:37:25  200  i-0961f552e761032ad  eu-north-1b  v1  visits=708  119 ms
+01:37:26  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=709  109 ms
+01:37:27  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=710  115 ms
+01:37:28  200  i-0961f552e761032ad  eu-north-1b  v1  visits=711  115 ms
+01:37:29  200  i-0961f552e761032ad  eu-north-1b  v1  visits=712  124 ms
+01:37:30  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=713  110 ms
+01:37:31  200  i-0961f552e761032ad  eu-north-1b  v1  visits=714  114 ms
+01:37:32  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=715  108 ms
+01:37:33  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=716  111 ms
+01:37:34  200  i-0961f552e761032ad  eu-north-1b  v1  visits=717  125 ms
+01:37:35  200  i-0961f552e761032ad  eu-north-1b  v1  visits=718  124 ms
+01:37:36  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=719  106 ms
+01:37:37  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=720  109 ms
+01:37:37  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=721  141 ms
+01:37:38  200  i-0961f552e761032ad  eu-north-1b  v1  visits=722  127 ms
+01:37:39  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=723  105 ms
+01:37:40  200  i-0961f552e761032ad  eu-north-1b  v1  visits=724  117 ms
+01:37:41  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=725  120 ms
+01:37:42  200  i-0961f552e761032ad  eu-north-1b  v1  visits=726  125 ms
+01:37:43  200  i-0961f552e761032ad  eu-north-1b  v1  visits=727  125 ms
+01:37:44  200  i-0961f552e761032ad  eu-north-1b  v1  visits=728  138 ms
+01:37:45  200  i-0961f552e761032ad  eu-north-1b  v1  visits=729  128 ms
+01:37:46  200  i-0961f552e761032ad  eu-north-1b  v1  visits=730  116 ms
+01:37:47  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=731  129 ms
+01:37:48  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=732  162 ms
+01:37:49  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=733  118 ms
+01:37:50  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=734  114 ms
+01:37:51  200  i-0961f552e761032ad  eu-north-1b  v1  visits=735  127 ms
+01:37:52  200  i-0961f552e761032ad  eu-north-1b  v1  visits=736  126 ms
+01:37:53  200  i-0961f552e761032ad  eu-north-1b  v1  visits=737  126 ms
+01:37:54  200  i-0961f552e761032ad  eu-north-1b  v1  visits=738  119 ms
+01:37:55  200  i-0961f552e761032ad  eu-north-1b  v1  visits=739  113 ms
+01:37:56  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=740  107 ms
+01:37:57  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=741  116 ms
+01:37:58  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=742  112 ms
+01:37:59  200  i-0961f552e761032ad  eu-north-1b  v1  visits=743  139 ms
+01:38:00  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=744  113 ms
+01:38:01  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=745  125 ms
+01:38:02  200  i-0961f552e761032ad  eu-north-1b  v1  visits=746  125 ms
+01:38:03  200  i-0961f552e761032ad  eu-north-1b  v1  visits=747  112 ms
+01:38:04  200  i-0961f552e761032ad  eu-north-1b  v1  visits=748  122 ms
+01:38:05  200  i-0961f552e761032ad  eu-north-1b  v1  visits=749  130 ms
+01:38:06  200  i-0961f552e761032ad  eu-north-1b  v1  visits=750  125 ms
+01:38:06  200  i-0961f552e761032ad  eu-north-1b  v1  visits=751  177 ms
+01:38:07  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=752  119 ms
+01:38:08  200  i-0961f552e761032ad  eu-north-1b  v1  visits=753  129 ms
+01:38:09  200  i-0961f552e761032ad  eu-north-1b  v1  visits=754  126 ms
+01:38:10  200  i-0961f552e761032ad  eu-north-1b  v1  visits=755  134 ms
+01:38:11  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=756  114 ms
+01:38:12  200  i-0961f552e761032ad  eu-north-1b  v1  visits=757  123 ms
+01:38:13  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=758  111 ms
+01:38:14  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=759  122 ms
+01:38:15  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=760  109 ms
+01:38:16  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=761  114 ms
+01:38:17  200  i-0961f552e761032ad  eu-north-1b  v1  visits=762  122 ms
+01:38:18  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=763  117 ms
+01:38:19  200  i-0961f552e761032ad  eu-north-1b  v1  visits=764  121 ms
+01:38:20  200  i-0961f552e761032ad  eu-north-1b  v1  visits=765  132 ms
+01:38:21  200  i-0961f552e761032ad  eu-north-1b  v1  visits=766  124 ms
+01:38:22  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=767  111 ms
+01:38:23  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=768  112 ms
+01:38:24  200  i-0961f552e761032ad  eu-north-1b  v1  visits=769  126 ms
+01:38:25  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=770  115 ms
+01:38:26  200  i-0961f552e761032ad  eu-north-1b  v1  visits=771  125 ms
+01:38:27  200  i-0961f552e761032ad  eu-north-1b  v1  visits=772  123 ms
+01:38:28  200  i-0961f552e761032ad  eu-north-1b  v1  visits=773  127 ms
+01:38:29  200  i-0961f552e761032ad  eu-north-1b  v1  visits=774  126 ms
+01:38:30  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=775  117 ms
+01:38:31  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=776  106 ms
+01:38:32  200  i-0961f552e761032ad  eu-north-1b  v1  visits=777  134 ms
+01:38:33  200  i-0961f552e761032ad  eu-north-1b  v1  visits=778  135 ms
+01:38:34  200  i-0961f552e761032ad  eu-north-1b  v1  visits=779  120 ms
+01:38:35  200  i-0961f552e761032ad  eu-north-1b  v1  visits=780  120 ms
+01:38:36  200  i-0961f552e761032ad  eu-north-1b  v1  visits=781  175 ms
+01:38:37  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=782  121 ms
+01:38:38  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=783  106 ms
+01:38:39  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=784  113 ms
+01:38:40  200  i-0961f552e761032ad  eu-north-1b  v1  visits=785  131 ms
+01:38:41  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=786  120 ms
+01:38:42  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=787  111 ms
+01:38:43  200  i-0961f552e761032ad  eu-north-1b  v1  visits=788  119 ms
+01:38:44  200  i-0961f552e761032ad  eu-north-1b  v1  visits=789  119 ms
+01:38:45  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=790  111 ms
+01:38:46  200  i-0961f552e761032ad  eu-north-1b  v1  visits=791  120 ms
+01:38:47  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=792  106 ms
+01:38:48  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=793  114 ms
+01:38:49  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=794  108 ms
+01:38:50  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=795  128 ms
+01:38:51  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=796  108 ms
+01:38:52  200  i-0961f552e761032ad  eu-north-1b  v1  visits=797  125 ms
+01:38:53  200  i-0961f552e761032ad  eu-north-1b  v1  visits=798  122 ms
+01:38:54  200  i-0961f552e761032ad  eu-north-1b  v1  visits=799  120 ms
+01:38:55  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=800  120 ms
+01:38:56  200  i-0961f552e761032ad  eu-north-1b  v1  visits=801  127 ms
+01:38:57  200  i-0961f552e761032ad  eu-north-1b  v1  visits=802  123 ms
+01:38:58  200  i-0961f552e761032ad  eu-north-1b  v1  visits=803  130 ms
+01:38:59  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=804  130 ms
+01:39:00  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=805  121 ms
+01:39:01  200  i-0961f552e761032ad  eu-north-1b  v1  visits=806  124 ms
+01:39:02  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=807  108 ms
+01:39:03  200  i-0961f552e761032ad  eu-north-1b  v1  visits=808  123 ms
+01:39:04  200  i-0961f552e761032ad  eu-north-1b  v1  visits=809  128 ms
+01:39:05  200  i-0961f552e761032ad  eu-north-1b  v1  visits=810  121 ms
+01:39:05  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=811  173 ms
+01:39:06  200  i-0961f552e761032ad  eu-north-1b  v1  visits=812  123 ms
+01:39:07  200  i-0961f552e761032ad  eu-north-1b  v1  visits=813  124 ms
+01:39:08  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=814  111 ms
+01:39:09  200  i-0961f552e761032ad  eu-north-1b  v1  visits=815  125 ms
+01:39:10  200  i-0961f552e761032ad  eu-north-1b  v1  visits=816  118 ms
+01:39:11  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=817  108 ms
+01:39:12  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=818  163 ms
+01:39:13  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=819  114 ms
+01:39:14  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=820  108 ms
+01:39:15  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=821  111 ms
+01:39:16  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=822  110 ms
+01:39:17  200  i-0961f552e761032ad  eu-north-1b  v1  visits=823  131 ms
+01:39:18  200  i-0961f552e761032ad  eu-north-1b  v1  visits=824  133 ms
+01:39:19  200  i-0961f552e761032ad  eu-north-1b  v1  visits=825  122 ms
+01:39:20  200  i-0961f552e761032ad  eu-north-1b  v1  visits=826  127 ms
+01:39:21  200  i-0961f552e761032ad  eu-north-1b  v1  visits=827  144 ms
+01:39:22  200  i-0961f552e761032ad  eu-north-1b  v1  visits=828  157 ms
+01:39:23  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=829  123 ms
+01:39:24  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=830  114 ms
+01:39:25  200  i-0961f552e761032ad  eu-north-1b  v1  visits=831  126 ms
+01:39:26  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=832  104 ms
+01:39:27  200  i-0961f552e761032ad  eu-north-1b  v1  visits=833  132 ms
+01:39:28  200  i-0961f552e761032ad  eu-north-1b  v1  visits=834  123 ms
+01:39:29  200  i-0961f552e761032ad  eu-north-1b  v1  visits=835  116 ms
+01:39:30  200  i-0961f552e761032ad  eu-north-1b  v1  visits=836  142 ms
+01:39:31  200  i-0961f552e761032ad  eu-north-1b  v1  visits=837  135 ms
+01:39:32  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=838  115 ms
+01:39:33  200  i-0b700cccfdb36e749  eu-north-1a  v1  visits=839  109 ms
+01:39:34  200  i-0961f552e761032ad  eu-north-1b  v1  visits=840  1139 ms
